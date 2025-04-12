@@ -72,16 +72,16 @@ class Insurer extends Model
 
         // Apply priority level multiplier with proper array access
         $priorityLevel = min(max((int)$claim->priority_level, 1), 5); // Ensure valid 1-5 range
-        $priorityMultiplier = $this->priority_multipliers[$priorityLevel] ?? 1.0;
+        $priorityMultiplier = (float)($this->priority_multipliers[$priorityLevel] ?? 1.0);
 
         // Apply day of month cost adjustment - cache this calculation to avoid repetition
         $dayFactor = $this->getDayFactorForDate($claim->batch_date);
 
         // Apply claim value multiplier if above threshold
         $valueMultiplier = 1.0;
-        $threshold = $this->claim_value_threshold ?? 1000;
+        $threshold = (float)($this->claim_value_threshold ?? 1000);
         if ((float)$claim->total_amount > $threshold) {
-            $valueMultiplier = $this->claim_value_multiplier ?? 1.2;
+            $valueMultiplier = (float)($this->claim_value_multiplier ?? 1.2);
         }
 
         return $baseCost * $priorityMultiplier * (1 + $dayFactor) * $valueMultiplier;

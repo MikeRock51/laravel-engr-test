@@ -66,4 +66,14 @@ class ClaimCreatedNotification extends Notification implements ShouldQueue
             'total_amount' => $this->claim->total_amount,
         ];
     }
+
+    /**
+     * Get the claim instance.
+     *
+     * @return \App\Models\Claim
+     */
+    public function getClaim()
+    {
+        return $this->claim;
+    }
 }
