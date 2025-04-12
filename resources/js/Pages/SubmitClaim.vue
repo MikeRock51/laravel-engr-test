@@ -86,6 +86,7 @@
                                             Submission Date
                                         </label>
                                         <input
+                                            readonly
                                             v-model="form.submission_date"
                                             type="date"
                                             id="submission_date"

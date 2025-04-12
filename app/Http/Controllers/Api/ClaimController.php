@@ -158,7 +158,11 @@ class ClaimController extends Controller
     public function processBatches()
     {
         try {
-            $results = $this->batchingService->processPendingClaims();
+            // Get the current user's ID
+            $userId = auth()->id();
+
+            // Pass the user ID to filter claims by this user
+            $results = $this->batchingService->processPendingClaims($userId);
 
             return response()->json([
                 'success' => true,
@@ -180,6 +184,7 @@ class ClaimController extends Controller
     public function getBatchSummary()
     {
         $batches = Claim::where('is_batched', true)
+            ->where('user_id', auth()->id())
             ->select('batch_id', 'batch_date', 'insurer_id', 'provider_name')
             ->selectRaw('COUNT(*) as claim_count')
             ->selectRaw('SUM(total_amount) as total_value')

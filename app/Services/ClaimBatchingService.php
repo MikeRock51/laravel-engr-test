@@ -12,14 +12,17 @@ class ClaimBatchingService
 {
     /**
      * Process all unbatched claims and create appropriate batches
+     *
+     * @param int|null $userId Optional user ID to filter claims by user
+     * @return array
      */
-    public function processPendingClaims(): array
+    public function processPendingClaims(?int $userId = null): array
     {
         $results = [];
         $insurers = Insurer::all();
 
         foreach ($insurers as $insurer) {
-            $batchResults = $this->processInsurerClaims($insurer);
+            $batchResults = $this->processInsurerClaims($insurer, $userId);
             if (!empty($batchResults)) {
                 $results[$insurer->code] = $batchResults;
             }
@@ -30,10 +33,14 @@ class ClaimBatchingService
 
     /**
      * Process claims for a specific insurer
+     *
+     * @param Insurer $insurer
+     * @param int|null $userId Optional user ID to filter claims by user
+     * @return array
      */
-    public function processInsurerClaims(Insurer $insurer): array
+    public function processInsurerClaims(Insurer $insurer, ?int $userId = null): array
     {
-        $pendingClaims = $this->getPendingClaims($insurer);
+        $pendingClaims = $this->getPendingClaims($insurer, $userId);
         if ($pendingClaims->isEmpty()) {
             return [];
         }
@@ -67,13 +74,22 @@ class ClaimBatchingService
 
     /**
      * Get all pending claims for an insurer
+     *
+     * @param Insurer $insurer
+     * @param int|null $userId Optional user ID to filter claims by user
+     * @return Collection
      */
-    private function getPendingClaims(Insurer $insurer): Collection
+    private function getPendingClaims(Insurer $insurer, ?int $userId = null): Collection
     {
-        return Claim::where('insurer_id', $insurer->id)
+        $query = Claim::where('insurer_id', $insurer->id)
             ->where('is_batched', false)
-            ->where('status', 'pending')
-            ->get();
+            ->where('status', 'pending');
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->get();
     }
 
     /**
