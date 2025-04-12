@@ -6,10 +6,9 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-// Redirect the root URL to the login page for unauthenticated users
-// or to the submit claim page for authenticated users
+// Redirect the root URL to the dashboard
 Route::get('/', function () {
-    return redirect()->route('submit-claim');
+    return redirect()->route('dashboard');
 });
 
 // Group routes that require authentication
