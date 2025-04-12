@@ -74,6 +74,7 @@
                                             v-model="form.encounter_date"
                                             type="date"
                                             id="encounter_date"
+                                            :max="maxDate"
                                             class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                             :class="{ 'border-red-500': form.errors.encounter_date }"
                                         >
@@ -279,6 +280,7 @@ const form = useForm({
 
 const processing = ref(false);
 const showSuccessModal = ref(false);
+const maxDate = new Date().toISOString().split('T')[0];
 
 onMounted(async () => {
     try {

@@ -40,7 +40,7 @@ class ClaimController extends Controller
         $validator = Validator::make($request->all(), [
             'insurer_id' => 'required|exists:insurers,id',
             'provider_name' => 'required|string|max:255',
-            'encounter_date' => 'required|date',
+            'encounter_date' => 'required|date|before_or_equal:today',
             'submission_date' => 'required|date',
             'priority_level' => 'required|integer|min:1|max:5',
             'specialty' => 'required|string|max:255',
