@@ -28,12 +28,30 @@ class ClaimController extends Controller
      */
     public function getInsurers()
     {
-        // Cache the insurers list for 30 minutes to avoid repeated queries
-        $insurers = Cache::remember('insurers_dropdown', 1800, function () {
-            return Insurer::select('id', 'name', 'code')->get();
-        });
+        try {
+            // Check if we have cached data
+            $insurers = Cache::get('insurers_dropdown');
 
-        return response()->json($insurers);
+            // If cache is empty or doesn't exist, force a refresh
+            if (!$insurers || count($insurers) === 0) {
+                Cache::forget('insurers_dropdown');
+                $insurers = Insurer::select('id', 'name', 'code')->get();
+
+                // Only cache if we have data
+                if (count($insurers) > 0) {
+                    Cache::put('insurers_dropdown', $insurers, now()->addMinutes(30));
+                }
+            }
+
+            return response()->json($insurers);
+        } catch (\Exception $e) {
+            // Log the error
+            \Log::error('Error fetching insurers: ' . $e->getMessage());
+
+            // Try to get fresh data without caching in case of an error
+            $insurers = Insurer::select('id', 'name', 'code')->get();
+            return response()->json($insurers);
+        }
     }
 
     /**
