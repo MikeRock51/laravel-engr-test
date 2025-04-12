@@ -19,4 +19,5 @@ Route::prefix('claims')->middleware('auth:sanctum')->group(function () {
     Route::get('/list', [ClaimController::class, 'getClaims']);
     Route::post('/process-batches', [ClaimController::class, 'processBatches']);
     Route::get('/batch-summary', [ClaimController::class, 'getBatchSummary']);
+    Route::post('/trigger-daily-batch', [ClaimController::class, 'triggerDailyBatch']);
 });

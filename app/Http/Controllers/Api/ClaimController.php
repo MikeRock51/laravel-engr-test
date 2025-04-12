@@ -186,4 +186,26 @@ class ClaimController extends Controller
 
         return response()->json($batches);
     }
+
+    /**
+     * Manually trigger the daily claim batching process
+     */
+    public function triggerDailyBatch()
+    {
+        try {
+            // Call Artisan command directly
+            \Artisan::call('claims:process-daily-batch');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Daily claim batching process triggered successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to trigger daily claim batching',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

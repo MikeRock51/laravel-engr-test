@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Notifications\Notifiable;
 
 class Insurer extends Model
 {
-    use HasFactory;
+    use HasFactory, Notifiable;
 
     protected $table = 'insurers';
 
@@ -68,5 +69,16 @@ class Insurer extends Model
     private function getSpecialtyCost(string $specialty): float
     {
         return $this->specialty_costs[$specialty] ?? 100.0; // Default cost if specialty not found
+    }
+
+    /**
+     * Route notifications for the mail channel.
+     *
+     * @param  \Illuminate\Notifications\Notification  $notification
+     * @return string
+     */
+    public function routeNotificationForMail($notification)
+    {
+        return $this->email;
     }
 }
