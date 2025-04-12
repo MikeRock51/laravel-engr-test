@@ -240,6 +240,15 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 
+// Ensure axios sends credentials with every request
+axios.defaults.withCredentials = true;
+
+// Get CSRF token from meta tag
+const csrfToken = document.head.querySelector('meta[name="csrf-token"]');
+if (csrfToken) {
+    axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken.content;
+}
+
 const insurers = ref([]);
 const batches = ref([]);
 const batchClaims = ref([]);
@@ -270,7 +279,8 @@ onMounted(async () => {
 
 async function loadBatches() {
     try {
-        const response = await axios.get('/api/claims/batch-summary');
+        // Use the web route instead of the API route
+        const response = await axios.get(route('claims.batch-summary'));
         batches.value = response.data;
     } catch (error) {
         console.error('Error loading batches:', error);
@@ -281,7 +291,8 @@ async function processBatches() {
     processing.value = true;
 
     try {
-        const response = await axios.post('/api/claims/process-batches');
+        // Use the web route instead of the API route
+        const response = await axios.post(route('claims.process-batches'));
         batchResults.value = response.data.batches;
         showResultsModal.value = true;
 
@@ -303,7 +314,8 @@ async function viewBatchDetails(batchId) {
     selectedBatchId.value = batchId;
 
     try {
-        const response = await axios.get('/api/claims/list', {
+        // Use the web route instead of the API route
+        const response = await axios.get(route('claims.list'), {
             params: { batch_id: batchId }
         });
 
@@ -331,7 +343,8 @@ async function applyFilters() {
             params.to_date = filters.value.to_date;
         }
 
-        const response = await axios.get('/api/claims/batch-summary', { params });
+        // Use the web route instead of the API route
+        const response = await axios.get(route('claims.batch-summary'), { params });
         batches.value = response.data;
     } catch (error) {
         console.error('Error applying filters:', error);

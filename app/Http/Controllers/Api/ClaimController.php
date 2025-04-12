@@ -104,7 +104,6 @@ class ClaimController extends Controller
 
             // For Inertia requests, redirect to dashboard with a success flash message
             return redirect()->route('dashboard')->with('success', 'Claim submitted successfully!');
-
         } catch (\Exception $e) {
             DB::rollBack();
 

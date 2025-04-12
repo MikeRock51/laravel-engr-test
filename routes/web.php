@@ -22,6 +22,11 @@ Route::middleware(['auth'])->group(function () {
     // Add a web route for claim submission that works with Inertia forms
     Route::post('/claims/submit', [ClaimController::class, 'submitClaim'])->name('claims.submit');
 
+    // Add web routes for batch operations
+    Route::post('/claims/process-batches', [ClaimController::class, 'processBatches'])->name('claims.process-batches');
+    Route::get('/claims/batch-summary', [ClaimController::class, 'getBatchSummary'])->name('claims.batch-summary');
+    Route::get('/claims/list', [ClaimController::class, 'getClaims'])->name('claims.list');
+
     // Claim Batches Page (now protected)
     Route::get('/batches', function () {
         return Inertia::render('ClaimBatches');
