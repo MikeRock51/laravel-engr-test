@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Insurer;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -144,6 +145,11 @@ class InsurerSeeder extends Seeder
             ]
         ];
 
-        DB::table('insurers')->insert($insurers);
+        // Check if insurers already exist
+        foreach ($insurers as $insurerData) {
+            if (!Insurer::where('code', $insurerData['code'])->exists()) {
+                DB::table('insurers')->insert([$insurerData]);
+            }
+        }
     }
 }
