@@ -44,12 +44,16 @@ class ClaimBatchingService
         $results = [];
         $dailyBatches = $this->createOptimizedDailyBatches($sortedClaims, $insurer);
 
-        foreach ($dailyBatches as $date => $batches) {
+        foreach ($dailyBatches as $providerDateKey => $batches) {
+            // Extract the date portion from the provider|date key for storing in claim record
+            list($providerName, $date) = explode('|', $providerDateKey);
+
             foreach ($batches as $batchIndex => $claims) {
-                $batchId = $this->generateBatchId($insurer, $date, $batchIndex);
+                $batchId = $this->generateBatchId($insurer, $providerDateKey, $batchIndex);
                 $batchResults = $this->createBatch($claims, $batchId, $date);
                 $results[] = [
                     'batch_id' => $batchId,
+                    'provider_name' => $providerName,
                     'date' => $date,
                     'claim_count' => count($claims),
                     'total_value' => $batchResults['total_value'],
@@ -95,49 +99,57 @@ class ClaimBatchingService
         $dailyClaimCounts = [];
         $today = Carbon::now()->format('Y-m-d');
 
-        // Group claims by specialty for better costing efficiency
-        $specialtyGroups = $claims->groupBy('specialty');
+        // First group claims by provider_name, then by specialty for better organization
+        $providerGroups = $claims->groupBy('provider_name');
 
-        foreach ($specialtyGroups as $specialty => $specialtyClaims) {
-            $currentDate = $today;
+        foreach ($providerGroups as $providerName => $providerClaims) {
+            // Group claims by specialty for better costing efficiency
+            $specialtyGroups = $providerClaims->groupBy('specialty');
 
-            foreach ($specialtyClaims as $claim) {
-                // Check if we've reached daily capacity for the current date
-                if (
-                    isset($dailyClaimCounts[$currentDate]) &&
-                    $dailyClaimCounts[$currentDate] >= $insurer->daily_capacity
-                ) {
-                    // Move to next day
-                    $currentDate = Carbon::parse($currentDate)->addDay()->format('Y-m-d');
-                }
+            foreach ($specialtyGroups as $specialty => $specialtyClaims) {
+                $currentDate = $today;
 
-                // Initialize daily claim count if not set
-                if (!isset($dailyClaimCounts[$currentDate])) {
-                    $dailyClaimCounts[$currentDate] = 0;
-                }
-
-                // Initialize daily batches array if not set
-                if (!isset($dailyBatches[$currentDate])) {
-                    $dailyBatches[$currentDate] = [];
-                }
-
-                // Find an existing batch that has room or create a new one
-                $batchAssigned = false;
-                foreach ($dailyBatches[$currentDate] as $batchIndex => $batchClaims) {
-                    if (count($batchClaims) < $insurer->max_batch_size) {
-                        $dailyBatches[$currentDate][$batchIndex][] = $claim;
-                        $batchAssigned = true;
-                        break;
+                foreach ($specialtyClaims as $claim) {
+                    // Check if we've reached daily capacity for the current date
+                    if (
+                        isset($dailyClaimCounts[$currentDate]) &&
+                        $dailyClaimCounts[$currentDate] >= $insurer->daily_capacity
+                    ) {
+                        // Move to next day
+                        $currentDate = Carbon::parse($currentDate)->addDay()->format('Y-m-d');
                     }
-                }
 
-                // If no existing batch had room, create a new one
-                if (!$batchAssigned) {
-                    $dailyBatches[$currentDate][] = [$claim];
-                }
+                    // Initialize daily claim count if not set
+                    if (!isset($dailyClaimCounts[$currentDate])) {
+                        $dailyClaimCounts[$currentDate] = 0;
+                    }
 
-                // Increment daily claim count
-                $dailyClaimCounts[$currentDate]++;
+                    // Create a composite key for provider+date
+                    $providerDateKey = $providerName . '|' . $currentDate;
+
+                    // Initialize provider+date batches array if not set
+                    if (!isset($dailyBatches[$providerDateKey])) {
+                        $dailyBatches[$providerDateKey] = [];
+                    }
+
+                    // Find an existing batch that has room or create a new one
+                    $batchAssigned = false;
+                    foreach ($dailyBatches[$providerDateKey] as $batchIndex => $batchClaims) {
+                        if (count($batchClaims) < $insurer->max_batch_size) {
+                            $dailyBatches[$providerDateKey][$batchIndex][] = $claim;
+                            $batchAssigned = true;
+                            break;
+                        }
+                    }
+
+                    // If no existing batch had room, create a new one
+                    if (!$batchAssigned) {
+                        $dailyBatches[$providerDateKey][] = [$claim];
+                    }
+
+                    // Increment daily claim count
+                    $dailyClaimCounts[$currentDate]++;
+                }
             }
         }
 
@@ -152,8 +164,8 @@ class ClaimBatchingService
     {
         $optimizedBatches = [];
 
-        foreach ($dailyBatches as $date => $batches) {
-            $optimizedBatches[$date] = [];
+        foreach ($dailyBatches as $providerDateKey => $batches) {
+            $optimizedBatches[$providerDateKey] = [];
             $pendingClaims = [];
 
             // First pass: identify batches below min_batch_size
@@ -165,7 +177,7 @@ class ClaimBatchingService
                     }
                 } else {
                     // Batch meets minimum size requirement
-                    $optimizedBatches[$date][] = $batch;
+                    $optimizedBatches[$providerDateKey][] = $batch;
                 }
             }
 
@@ -175,9 +187,9 @@ class ClaimBatchingService
                     $added = false;
 
                     // Try to add to existing batches that have room
-                    foreach ($optimizedBatches[$date] as $batchIndex => $batch) {
+                    foreach ($optimizedBatches[$providerDateKey] as $batchIndex => $batch) {
                         if (count($batch) < $insurer->max_batch_size) {
-                            $optimizedBatches[$date][$batchIndex][] = $claim;
+                            $optimizedBatches[$providerDateKey][$batchIndex][] = $claim;
                             $added = true;
                             unset($pendingClaims[$index]);
                             break;
@@ -199,18 +211,22 @@ class ClaimBatchingService
 
                         // If batch reaches min size, add it to optimized batches
                         if (count($newBatch) >= $insurer->min_batch_size) {
-                            $optimizedBatches[$date][] = $newBatch;
+                            $optimizedBatches[$providerDateKey][] = $newBatch;
                             $newBatch = [];
                         }
                     }
 
                     // If we have a partial batch left, move to next day
                     if (!empty($newBatch)) {
+                        // Extract provider name and date from the key
+                        list($providerName, $date) = explode('|', $providerDateKey);
                         $nextDate = Carbon::parse($date)->addDay()->format('Y-m-d');
-                        if (!isset($optimizedBatches[$nextDate])) {
-                            $optimizedBatches[$nextDate] = [];
+                        $nextProviderDateKey = $providerName . '|' . $nextDate;
+
+                        if (!isset($optimizedBatches[$nextProviderDateKey])) {
+                            $optimizedBatches[$nextProviderDateKey] = [];
                         }
-                        $optimizedBatches[$nextDate][] = $newBatch;
+                        $optimizedBatches[$nextProviderDateKey][] = $newBatch;
                     }
                 }
             }
@@ -222,10 +238,23 @@ class ClaimBatchingService
     /**
      * Generate a unique batch ID
      */
-    private function generateBatchId(Insurer $insurer, string $date, int $batchIndex): string
+    private function generateBatchId(Insurer $insurer, string $providerDateKey, int $batchIndex): string
     {
-        $dateStr = str_replace('-', '', $date);
-        return $insurer->code . '-' . $dateStr . '-' . ($batchIndex + 1) . '-' . Str::random(4);
+        // Extract provider name and date from the key
+        list($providerName, $date) = explode('|', $providerDateKey);
+
+        // Format date as specified (e.g., "Jan 5 2021")
+        $formattedDate = Carbon::parse($date)->format('M j Y');
+
+        // Create batch ID in format: Provider Name + Date (+ sequence if multiple batches for same provider/date)
+        $batchId = $providerName . ' ' . $formattedDate;
+
+        // If there are multiple batches for the same provider and date, add a sequence number
+        if ($batchIndex > 0) {
+            $batchId .= ' (' . ($batchIndex + 1) . ')';
+        }
+
+        return $batchId;
     }
 
     /**

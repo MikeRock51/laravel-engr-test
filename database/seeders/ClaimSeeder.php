@@ -67,14 +67,33 @@ class ClaimSeeder extends Seeder
             ['name' => 'Lab Work', 'price_range' => [100, 400]]
         ];
 
-        // Generate batch IDs for some claims
-        $batchIds = [
-            'INS-A-20250401-1-ABC1',
-            'INS-A-20250402-1-DEF2',
-            'INS-B-20250401-1-GHI3',
-            'INS-C-20250402-1-JKL4',
-            'INS-D-20250403-1-MNO5'
+        // Generate batch IDs using provider name + date format
+        // Using dates between April 1-10, 2025 (current date is April 12, 2025)
+        $batchDates = [
+            Carbon::create(2025, 4, 8),
+            Carbon::create(2025, 4, 9),
+            Carbon::create(2025, 4, 10),
+            Carbon::create(2025, 4, 11)
         ];
+
+        // Create provider+date combinations for batch IDs
+        $batchIds = [];
+        foreach ($providers as $index => $provider) {
+            // Only use the first 5 providers for batch IDs
+            if ($index >= 5) break;
+
+            // Create 1-2 batch IDs per provider with different dates
+            $numBatches = rand(1, 2);
+            for ($i = 0; $i < $numBatches; $i++) {
+                $date = $batchDates[array_rand($batchDates)];
+                $formattedDate = $date->format('M j Y'); // Format as "Apr 10 2025"
+                $batchIds[] = [
+                    'id' => $provider . ' ' . $formattedDate,
+                    'provider' => $provider,
+                    'date' => $date->format('Y-m-d')
+                ];
+            }
+        }
 
         // Create 50 claims
         for ($i = 0; $i < 50; $i++) {
@@ -94,9 +113,22 @@ class ClaimSeeder extends Seeder
             $status = 'pending';
 
             if ($isBatched) {
-                $batchId = $batchIds[array_rand($batchIds)];
-                $batchDate = Carbon::now()->format('Y-m-d');
+                // Select a random batch, but try to match the provider when possible
+                $matchingBatches = array_filter($batchIds, function ($batch) use ($provider) {
+                    return $batch['provider'] === $provider;
+                });
+
+                // If no matching batch for this provider, just pick a random one
+                $selectedBatch = !empty($matchingBatches)
+                    ? $matchingBatches[array_rand($matchingBatches)]
+                    : $batchIds[array_rand($batchIds)];
+
+                $batchId = $selectedBatch['id'];
+                $batchDate = $selectedBatch['date'];
                 $status = 'batched';
+
+                // Override the provider to match the batch provider for consistency
+                $provider = $selectedBatch['provider'];
             }
 
             // Create the claim
