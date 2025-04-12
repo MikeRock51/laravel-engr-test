@@ -1,129 +1,137 @@
 <template>
-    <GuestLayout>
+    <AuthenticatedLayout>
         <Head title="Claim Batches" />
 
-        <div class="card-header flex justify-between items-center">
-            <div>Claim Batches</div>
-            <button
-                @click="processBatches"
-                class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                :disabled="processing"
-            >
-                {{ processing ? 'Processing...' : 'Process Pending Claims' }}
-            </button>
-        </div>
+        <div class="py-12">
+            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6 text-gray-900">
+                        <div class="card-header flex justify-between items-center mb-4">
+                            <div class="text-xl font-semibold">Claim Batches</div>
+                            <button
+                                @click="processBatches"
+                                class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                                :disabled="processing"
+                            >
+                                {{ processing ? 'Processing...' : 'Process Pending Claims' }}
+                            </button>
+                        </div>
 
-        <div class="card-body">
-            <!-- Filters -->
-            <div class="mb-6 p-4 bg-gray-50 rounded">
-                <h3 class="text-lg font-semibold mb-3">Filters</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2">
-                            Insurer
-                        </label>
-                        <select
-                            v-model="filters.insurer_id"
-                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                        >
-                            <option :value="null">All Insurers</option>
-                            <option v-for="insurer in insurers" :key="insurer.id" :value="insurer.id">
-                                {{ insurer.name }}
-                            </option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2">
-                            From Date
-                        </label>
-                        <input
-                            v-model="filters.from_date"
-                            type="date"
-                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                        >
-                    </div>
-                    <div>
-                        <label class="block text-gray-700 text-sm font-bold mb-2">
-                            To Date
-                        </label>
-                        <input
-                            v-model="filters.to_date"
-                            type="date"
-                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                        >
-                    </div>
-                </div>
-                <div class="mt-4 flex justify-end">
-                    <button
-                        @click="applyFilters"
-                        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                    >
-                        Apply Filters
-                    </button>
-                </div>
-            </div>
-
-            <!-- Batches Summary -->
-            <div v-if="batches.length > 0">
-                <h3 class="text-lg font-semibold mb-3">Batches</h3>
-
-                <div class="overflow-x-auto">
-                    <table class="min-w-full bg-white">
-                        <thead class="bg-gray-100">
-                            <tr>
-                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
-                                    Batch ID
-                                </th>
-                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
-                                    Insurer
-                                </th>
-                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
-                                    Date
-                                </th>
-                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
-                                    Claims
-                                </th>
-                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
-                                    Total Value
-                                </th>
-                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="batch in batches" :key="batch.batch_id" class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
-                                    {{ batch.batch_id }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
-                                    {{ batch.insurer.name }} ({{ batch.insurer.code }})
-                                </td>
-                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
-                                    {{ formatDate(batch.batch_date) }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
-                                    {{ batch.claim_count }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
-                                    ${{ formatCurrency(batch.total_value) }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
+                        <div class="card-body">
+                            <!-- Filters -->
+                            <div class="mb-6 p-4 bg-gray-50 rounded">
+                                <h3 class="text-lg font-semibold mb-3">Filters</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-bold mb-2">
+                                            Insurer
+                                        </label>
+                                        <select
+                                            v-model="filters.insurer_id"
+                                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                        >
+                                            <option :value="null">All Insurers</option>
+                                            <option v-for="insurer in insurers" :key="insurer.id" :value="insurer.id">
+                                                {{ insurer.name }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-bold mb-2">
+                                            From Date
+                                        </label>
+                                        <input
+                                            v-model="filters.from_date"
+                                            type="date"
+                                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                        >
+                                    </div>
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-bold mb-2">
+                                            To Date
+                                        </label>
+                                        <input
+                                            v-model="filters.to_date"
+                                            type="date"
+                                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                        >
+                                    </div>
+                                </div>
+                                <div class="mt-4 flex justify-end">
                                     <button
-                                        @click="viewBatchDetails(batch.batch_id)"
-                                        class="text-blue-600 hover:text-blue-900"
+                                        @click="applyFilters"
+                                        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
                                     >
-                                        View Details
+                                        Apply Filters
                                     </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                                </div>
+                            </div>
 
-            <div v-else class="text-center py-8">
-                <p class="text-gray-500">No batches found. Process pending claims to create batches.</p>
+                            <!-- Batches Summary -->
+                            <div v-if="batches.length > 0">
+                                <h3 class="text-lg font-semibold mb-3">Batches</h3>
+
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full bg-white">
+                                        <thead class="bg-gray-100">
+                                            <tr>
+                                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
+                                                    Batch ID
+                                                </th>
+                                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
+                                                    Insurer
+                                                </th>
+                                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
+                                                    Date
+                                                </th>
+                                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
+                                                    Claims
+                                                </th>
+                                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
+                                                    Total Value
+                                                </th>
+                                                <th class="px-6 py-3 border-b border-gray-200 text-left text-xs leading-4 font-medium text-gray-500 uppercase tracking-wider">
+                                                    Actions
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="batch in batches" :key="batch.batch_id" class="hover:bg-gray-50">
+                                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
+                                                    {{ batch.batch_id }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
+                                                    {{ batch.insurer.name }} ({{ batch.insurer.code }})
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
+                                                    {{ formatDate(batch.batch_date) }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
+                                                    {{ batch.claim_count }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
+                                                    ${{ formatCurrency(batch.total_value) }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-no-wrap border-b border-gray-200">
+                                                    <button
+                                                        @click="viewBatchDetails(batch.batch_id)"
+                                                        class="text-blue-600 hover:text-blue-900"
+                                                    >
+                                                        View Details
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div v-else class="text-center py-8">
+                                <p class="text-gray-500">No batches found. Process pending claims to create batches.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -223,12 +231,12 @@
                 </div>
             </div>
         </div>
-    </GuestLayout>
+    </AuthenticatedLayout>
 </template>
 
 <script setup>
 import { Head } from "@inertiajs/vue3";
-import GuestLayout from "@/Layouts/GuestLayout.vue";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 

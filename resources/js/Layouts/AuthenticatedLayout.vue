@@ -32,6 +32,12 @@ const showingNavigationDropdown = ref(false);
                                 <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
                                     Dashboard
                                 </NavLink>
+                                <NavLink :href="route('submit-claim')" :active="route().current('submit-claim')">
+                                    Submit Claim
+                                </NavLink>
+                                <NavLink :href="route('batches')" :active="route().current('batches')">
+                                    Claim Batches
+                                </NavLink>
                             </div>
                         </div>
 
@@ -55,7 +61,7 @@ const showingNavigationDropdown = ref(false);
                                                 >
                                                     <path
                                                         fill-rule="evenodd"
-                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 0 010-1.414z"
                                                         clip-rule="evenodd"
                                                     />
                                                 </svg>
@@ -114,6 +120,12 @@ const showingNavigationDropdown = ref(false);
                     <div class="pt-2 pb-3 space-y-1">
                         <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
                             Dashboard
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink :href="route('submit-claim')" :active="route().current('submit-claim')">
+                            Submit Claim
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink :href="route('batches')" :active="route().current('batches')">
+                            Claim Batches
                         </ResponsiveNavLink>
                     </div>
 

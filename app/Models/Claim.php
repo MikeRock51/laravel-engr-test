@@ -14,6 +14,7 @@ class Claim extends Model
     protected $table = 'claims';
 
     protected $fillable = [
+        'user_id',
         'insurer_id',
         'provider_name',
         'encounter_date',
@@ -42,6 +43,14 @@ class Claim extends Model
     public function insurer(): BelongsTo
     {
         return $this->belongsTo(Insurer::class);
+    }
+
+    /**
+     * Get the user that owns the claim
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     /**

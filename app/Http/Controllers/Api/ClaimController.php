@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Inertia\Inertia;
 
 class ClaimController extends Controller
 {
@@ -50,7 +51,11 @@ class ClaimController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            if ($request->wantsJson()) {
+                return response()->json(['errors' => $validator->errors()], 422);
+            }
+
+            return back()->withErrors($validator)->withInput();
         }
 
         try {
@@ -58,6 +63,7 @@ class ClaimController extends Controller
 
             // Create the claim
             $claim = new Claim();
+            $claim->user_id = auth()->id(); // Associate claim with current user
             $claim->insurer_id = $request->insurer_id;
             $claim->provider_name = $request->provider_name;
             $claim->encounter_date = $request->encounter_date;
@@ -87,18 +93,30 @@ class ClaimController extends Controller
 
             DB::commit();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Claim submitted successfully',
-                'claim' => $claim->load('items')
-            ]);
+            // Check if this is an Inertia request or an API request
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Claim submitted successfully',
+                    'claim' => $claim->load('items')
+                ]);
+            }
+
+            // For Inertia requests, redirect to dashboard with a success flash message
+            return redirect()->route('dashboard')->with('success', 'Claim submitted successfully!');
+
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to submit claim',
-                'error' => $e->getMessage()
-            ], 500);
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to submit claim',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+
+            return back()->with('error', 'Failed to submit claim: ' . $e->getMessage())->withInput();
         }
     }
 
