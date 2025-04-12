@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Claim;
 use App\Models\ClaimItem;
 use App\Models\Insurer;
+use App\Notifications\ClaimCreatedNotification;
 use App\Services\ClaimBatchingService;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -90,6 +90,10 @@ class ClaimController extends Controller
             // Update claim with total amount
             $claim->total_amount = $totalAmount;
             $claim->save();
+
+            // Notify the insurer about the new claim
+            $insurer = Insurer::find($claim->insurer_id);
+            $insurer->notify(new ClaimCreatedNotification($claim));
 
             DB::commit();
 

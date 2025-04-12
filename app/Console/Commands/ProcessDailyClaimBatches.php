@@ -60,9 +60,6 @@ class ProcessDailyClaimBatches extends Command
 
             $this->info('Successfully batched claims. Sending notifications to insurers...');
 
-            // Group batches by insurer for notifications
-            $batchesByInsurer = [];
-
             // The results are already grouped by insurer code
             foreach ($results as $insurerCode => $batches) {
                 // Find the insurer by code
