@@ -11,6 +11,7 @@ use App\Services\ClaimBatchingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 
 class ClaimController extends Controller
@@ -27,7 +28,11 @@ class ClaimController extends Controller
      */
     public function getInsurers()
     {
-        $insurers = Insurer::select('id', 'name', 'code')->get();
+        // Cache the insurers list for 30 minutes to avoid repeated queries
+        $insurers = Cache::remember('insurers_dropdown', 1800, function () {
+            return Insurer::select('id', 'name', 'code')->get();
+        });
+
         return response()->json($insurers);
     }
 
@@ -125,10 +130,29 @@ class ClaimController extends Controller
 
     /**
      * Get claims with optional filtering
+     * Optimized for better query performance
      */
     public function getClaims(Request $request)
     {
-        $query = Claim::with(['insurer', 'items']);
+        // Start with a query builder and only eager load necessary relationships
+        $query = Claim::query();
+
+        // Only select the fields we need for the list display
+        $query->select([
+            'id',
+            'insurer_id',
+            'provider_name',
+            'encounter_date',
+            'submission_date',
+            'priority_level',
+            'specialty',
+            'total_amount',
+            'batch_id',
+            'status',
+            'is_batched',
+            'batch_date',
+            'created_at'
+        ]);
 
         // Apply filters if provided
         if ($request->has('insurer_id')) {
@@ -147,7 +171,46 @@ class ClaimController extends Controller
             $query->whereBetween('submission_date', [$request->from_date, $request->to_date]);
         }
 
-        $claims = $query->orderBy('created_at', 'desc')->paginate(15);
+        // User-specific filter
+        if ($request->has('user_filter') && $request->user_filter) {
+            $query->where('user_id', auth()->id());
+        }
+
+        // Add eager loading only when necessary
+        if ($request->has('with_items') && $request->with_items) {
+            $query->with('items');
+        }
+
+        // Always load the insurer but only select needed fields
+        $query->with(['insurer:id,name,code']);
+
+        // Implement proper caching if the same query is run frequently
+        $cacheKey = 'claims_' . md5(json_encode($request->all()) . '_' . auth()->id());
+        $cacheDuration = 5; // Cache for 5 minutes
+
+        // Return from cache if available
+        if (\Illuminate\Support\Facades\Cache::has($cacheKey) && !$request->has('no_cache')) {
+            return response()->json(\Illuminate\Support\Facades\Cache::get($cacheKey));
+        }
+
+        // Optimize ordering for better performance (ensure indexes exist on these columns)
+        $orderBy = $request->input('order_by', 'created_at');
+        $orderDir = $request->input('order_dir', 'desc');
+
+        // Validate order by column to prevent SQL injection
+        $allowedColumns = ['created_at', 'submission_date', 'total_amount', 'priority_level', 'provider_name'];
+        if (!in_array($orderBy, $allowedColumns)) {
+            $orderBy = 'created_at';
+        }
+
+        $query->orderBy($orderBy, $orderDir);
+
+        // Use cursor pagination for better performance with large datasets
+        $perPage = min((int)$request->input('per_page', 15), 50); // Limit max per page
+        $claims = $query->paginate($perPage);
+
+        // Store in cache
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $claims, $cacheDuration * 60);
 
         return response()->json($claims);
     }

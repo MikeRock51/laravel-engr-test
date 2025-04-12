@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class ClaimItem extends Model
 {
@@ -33,11 +34,22 @@ class ClaimItem extends Model
     }
 
     /**
+     * Use attribute accessor for subtotal to improve performance and avoid redundant calculations
+     */
+    protected function subtotal(): Attribute
+    {
+        return Attribute::make(
+            get: fn($value) => $value,
+            set: fn() => $this->calculateSubtotal()
+        );
+    }
+
+    /**
      * Calculate subtotal based on unit price and quantity
      */
     public function calculateSubtotal(): float
     {
-        return $this->unit_price * $this->quantity;
+        return (float)$this->unit_price * (int)$this->quantity;
     }
 
     /**
@@ -50,7 +62,23 @@ class ClaimItem extends Model
         });
 
         static::updating(function ($claimItem) {
-            $claimItem->subtotal = $claimItem->calculateSubtotal();
+            // Only recalculate if unit_price or quantity has changed
+            if ($claimItem->isDirty(['unit_price', 'quantity'])) {
+                $claimItem->subtotal = $claimItem->calculateSubtotal();
+            }
+        });
+
+        // Update claim total when item is saved/deleted
+        static::saved(function ($claimItem) {
+            if ($claimItem->claim) {
+                $claimItem->claim->updateTotal();
+            }
+        });
+
+        static::deleted(function ($claimItem) {
+            if ($claimItem->claim) {
+                $claimItem->claim->updateTotal();
+            }
         });
     }
 }

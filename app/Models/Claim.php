@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class Claim extends Model
 {
@@ -38,6 +39,13 @@ class Claim extends Model
     ];
 
     /**
+     * The relationships that should be eager loaded by default.
+     *
+     * @var array
+     */
+    protected $with = [];
+
+    /**
      * Get the insurer that the claim belongs to
      */
     public function insurer(): BelongsTo
@@ -63,18 +71,22 @@ class Claim extends Model
 
     /**
      * Calculate the total amount for the claim based on its items
+     * Improved to use the relationship's sum query builder method
+     * instead of loading all items into memory
      */
     public function calculateTotal(): float
     {
-        return $this->items->sum('subtotal');
+        return $this->items()->sum('subtotal');
     }
 
     /**
      * Update the total amount for the claim
+     * Optimized to avoid reloading items
      */
     public function updateTotal(): void
     {
-        $this->total_amount = $this->calculateTotal();
+        $total = $this->calculateTotal();
+        $this->total_amount = $total;
         $this->save();
     }
 
@@ -84,5 +96,33 @@ class Claim extends Model
     public function getProcessingCost(): float
     {
         return $this->insurer->calculateProcessingCost($this);
+    }
+
+    /**
+     * Get pending claims query scope
+     */
+    public function scopePending($query)
+    {
+        return $query->where('is_batched', false)
+            ->where('status', 'pending');
+    }
+
+    /**
+     * Get batched claims query scope
+     */
+    public function scopeBatched($query)
+    {
+        return $query->where('is_batched', true)
+            ->where('status', 'batched');
+    }
+
+    /**
+     * Cache batch date attribute formatted as requested
+     */
+    protected function formattedBatchDate(): Attribute
+    {
+        return Attribute::make(
+            get: fn() => $this->batch_date ? $this->batch_date->format('M j Y') : null,
+        )->shouldCache();
     }
 }
