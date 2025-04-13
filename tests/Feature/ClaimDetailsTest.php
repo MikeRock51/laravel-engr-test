@@ -110,6 +110,7 @@ class ClaimDetailsTest extends TestCase
     public function test_user_cannot_see_another_users_claim_details()
     {
         // Create another user
+        /** @var \App\Models\User $anotherUser */
         $anotherUser = User::factory()->create();
 
         $response = $this->actingAs($anotherUser)
