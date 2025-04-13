@@ -20,6 +20,7 @@
                                         id="insurer"
                                         class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                         :class="{ 'border-red-500': form.errors.insurer_id }"
+                                        @change="updateCostEstimation"
                                     >
                                         <option value="" disabled>Select an insurer</option>
                                         <option v-for="insurer in insurers" :key="insurer.id" :value="insurer.id">
@@ -54,6 +55,7 @@
                                         id="specialty"
                                         class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                         :class="{ 'border-red-500': form.errors.specialty }"
+                                        @change="updateCostEstimation"
                                     >
                                         <option value="" disabled>Select a specialty</option>
                                         <option v-for="specialty in specialties" :key="specialty" :value="specialty">
@@ -77,6 +79,7 @@
                                             :max="maxDate"
                                             class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                             :class="{ 'border-red-500': form.errors.encounter_date }"
+                                            @change="updateCostEstimation"
                                         >
                                         <p v-if="form.errors.encounter_date" class="text-red-500 text-xs italic">{{ form.errors.encounter_date }}</p>
                                     </div>
@@ -110,6 +113,7 @@
                                                 :value="n"
                                                 v-model="form.priority_level"
                                                 class="form-radio h-5 w-5 text-blue-600"
+                                                @change="updateCostEstimation"
                                             >
                                             <span class="ml-2 text-gray-700">{{ n }}</span>
                                         </label>
@@ -151,6 +155,7 @@
                                                     min="0"
                                                     class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                                     :class="{ 'border-red-500': form.errors['items.' + index + '.unit_price'] }"
+                                                    @change="updateCostEstimation"
                                                 >
                                                 <p v-if="form.errors['items.' + index + '.unit_price']" class="text-red-500 text-xs italic">
                                                     {{ form.errors['items.' + index + '.unit_price'] }}
@@ -168,6 +173,7 @@
                                                     min="1"
                                                     class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                                     :class="{ 'border-red-500': form.errors['items.' + index + '.quantity'] }"
+                                                    @change="updateCostEstimation"
                                                 >
                                                 <p v-if="form.errors['items.' + index + '.quantity']" class="text-red-500 text-xs italic">
                                                     {{ form.errors['items.' + index + '.quantity'] }}
@@ -204,6 +210,48 @@
                                     <div class="mt-4 text-right">
                                         <div class="text-lg font-bold">
                                             Total: ${{ calculateTotal() }}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            @click="updateCostEstimation"
+                                            class="mt-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 py-1 px-4 rounded text-sm focus:outline-none focus:shadow-outline"
+                                        >
+                                            {{ showCostEstimation ? 'Update Cost Estimate' : 'Show Cost Estimate' }}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Cost Estimation Panel - Moved to bottom of form before submit button -->
+                                <div v-if="showCostEstimation && costEstimation" class="my-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <h3 class="text-lg font-semibold mb-2 text-blue-700">Processing Cost Estimation</h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <p class="text-sm text-gray-600 mb-1">Base cost for {{ form.specialty || 'selected specialty' }}:</p>
+                                            <p class="font-medium">${{ costEstimation.baseCost?.toFixed(2) || '0.00' }}</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm text-gray-600 mb-1">Priority multiplier (Level {{ form.priority_level }}):</p>
+                                            <p class="font-medium">{{ costEstimation.priorityMultiplier?.toFixed(2) || '1.00' }}x</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm text-gray-600 mb-1">Time of month factor:</p>
+                                            <p class="font-medium">{{ costEstimation.dayFactor?.toFixed(2) || '0.00' }}x</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm text-gray-600 mb-1">Value multiplier:</p>
+                                            <p class="font-medium">{{ costEstimation.valueMultiplier?.toFixed(2) || '1.00' }}x</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 pt-3 border-t border-blue-200">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-gray-600">Estimated total processing cost:</span>
+                                            <span class="text-xl font-bold text-blue-700">${{ costEstimation.totalCost?.toFixed(2) || '0.00' }}</span>
+                                        </div>
+                                        <div class="mt-2 text-sm" v-if="costEstimation.batchingTips">
+                                            <p class="font-semibold text-indigo-600">Batching Tips:</p>
+                                            <ul class="list-disc pl-5 mt-1 text-gray-600">
+                                                <li v-for="(tip, index) in costEstimation.batchingTips" :key="index">{{ tip }}</li>
+                                            </ul>
                                         </div>
                                     </div>
                                 </div>
@@ -246,10 +294,11 @@
 <script setup>
 import { Head, useForm } from "@inertiajs/vue3";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import axios from 'axios';
 
 const insurers = ref([]);
+const insurerDetails = ref({});
 const specialties = ref([
     'Cardiology',
     'Dermatology',
@@ -281,11 +330,19 @@ const form = useForm({
 const processing = ref(false);
 const showSuccessModal = ref(false);
 const maxDate = new Date().toISOString().split('T')[0];
+const costEstimation = ref(null);
+const showCostEstimation = ref(false);
 
 onMounted(async () => {
     try {
         const response = await axios.get('/api/claims/insurers');
         insurers.value = response.data;
+
+        // Fetch detailed insurer information for cost estimation
+        if (response.data.length > 0) {
+            const detailsResponse = await axios.get('/api/claims/insurers/details');
+            insurerDetails.value = detailsResponse.data;
+        }
     } catch (error) {
         console.error('Error loading insurers:', error);
     }
@@ -298,6 +355,7 @@ function addItem() {
 function removeItem(index) {
     if (form.items.length > 1) {
         form.items.splice(index, 1);
+        updateCostEstimation();
     }
 }
 
@@ -310,6 +368,44 @@ function calculateTotal() {
         return total + (parseFloat(item.unit_price) * parseInt(item.quantity));
     }, 0).toFixed(2);
 }
+
+async function updateCostEstimation() {
+    if (!form.insurer_id || !form.specialty) {
+        return;
+    }
+
+    showCostEstimation.value = true;
+
+    try {
+        const total = parseFloat(calculateTotal());
+        const payload = {
+            insurer_id: form.insurer_id,
+            specialty: form.specialty,
+            priority_level: form.priority_level,
+            total_amount: total,
+            encounter_date: form.encounter_date,
+            submission_date: form.submission_date
+        };
+
+        // Use the globally configured axios instance that already has authentication
+        // headers set up in bootstrap.js
+        const response = await axios.post('/api/claims/estimate-cost', payload);
+        costEstimation.value = response.data;
+    } catch (error) {
+        console.error('Error estimating cost:', error);
+        costEstimation.value = null;
+    }
+}
+
+// Watch for changes in key fields to auto-update cost estimation
+watch([() => form.insurer_id, () => form.specialty, () => form.priority_level],
+    (newValues, oldValues) => {
+        if (newValues.every(val => val) &&
+            (newValues[0] !== oldValues[0] || newValues[1] !== oldValues[1] || newValues[2] !== oldValues[2])) {
+            updateCostEstimation();
+        }
+    }
+);
 
 function submitClaim() {
     processing.value = true;

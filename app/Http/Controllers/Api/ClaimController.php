@@ -305,4 +305,167 @@ class ClaimController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get detailed insurer information for cost estimation
+     * This endpoint provides extended information about insurers for frontend use
+     */
+    public function getInsurerDetails()
+    {
+        try {
+            // Check if we have cached data
+            $insurerDetails = Cache::get('insurers_details');
+
+            // If cache is empty or doesn't exist, force a refresh
+            if (!$insurerDetails) {
+                // Only fetch necessary fields to optimize the payload
+                $insurers = Insurer::select([
+                    'id',
+                    'name',
+                    'code',
+                    'date_preference',
+                    'specialty_costs',
+                    'priority_multipliers',
+                    'claim_value_threshold',
+                    'claim_value_multiplier',
+                    'daily_capacity',
+                    'min_batch_size',
+                    'max_batch_size'
+                ])->get();
+
+                // Index by ID for easier frontend access
+                $insurerDetails = [];
+                foreach ($insurers as $insurer) {
+                    $insurerDetails[$insurer->id] = $insurer;
+                }
+
+                // Cache for 30 minutes
+                Cache::put('insurers_details', $insurerDetails, now()->addMinutes(30));
+            }
+
+            return response()->json($insurerDetails);
+        } catch (\Exception $e) {
+            // Log the error
+            \Log::error('Error fetching insurer details: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to fetch insurer details'], 500);
+        }
+    }
+
+    /**
+     * Estimate claim processing cost based on provided parameters
+     * This helps users understand how different factors affect processing costs
+     */
+    public function estimateClaimCost(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'insurer_id' => 'required|exists:insurers,id',
+            'specialty' => 'required|string',
+            'priority_level' => 'required|integer|min:1|max:5',
+            'total_amount' => 'required|numeric|min:0',
+            'encounter_date' => 'nullable|date',
+            'submission_date' => 'nullable|date',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            $insurer = Insurer::findOrFail($request->insurer_id);
+
+            // Calculate all cost factors
+            $baseCost = $this->getSpecialtyCost($insurer, $request->specialty);
+
+            // Priority level multiplier
+            $priorityLevel = min(max((int)$request->priority_level, 1), 5);
+            $priorityMultiplier = (float)($insurer->priority_multipliers[$priorityLevel] ?? 1.0);
+
+            // Day factor based on preferred date
+            $dateToUse = $insurer->date_preference === 'encounter_date' && $request->encounter_date
+                ? $request->encounter_date
+                : $request->submission_date;
+
+            $dayFactor = $this->batchingService->calculateDayFactor($dateToUse);
+
+            // Value multiplier for high-value claims
+            $valueMultiplier = 1.0;
+            if ($insurer->claim_value_threshold > 0 && $request->total_amount > $insurer->claim_value_threshold) {
+                $valueMultiplier = $insurer->claim_value_multiplier;
+            }
+
+            // Calculate total cost
+            $totalCost = $baseCost * $priorityMultiplier * (1 + $dayFactor) * $valueMultiplier;
+
+            // Generate batching tips based on claim characteristics
+            $batchingTips = $this->generateBatchingTips(
+                $insurer,
+                $request->specialty,
+                $priorityLevel,
+                $request->total_amount,
+                $dateToUse
+            );
+
+            return response()->json([
+                'baseCost' => $baseCost,
+                'priorityMultiplier' => $priorityMultiplier,
+                'dayFactor' => $dayFactor,
+                'valueMultiplier' => $valueMultiplier,
+                'totalCost' => $totalCost,
+                'batchingTips' => $batchingTips
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error calculating claim cost estimate: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to calculate cost estimate'], 500);
+        }
+    }
+
+    /**
+     * Generate batching tips based on claim characteristics
+     */
+    private function generateBatchingTips(Insurer $insurer, string $specialty, int $priority, float $amount, ?string $date)
+    {
+        $tips = [];
+
+        // Specialty cost tip
+        $specialtyCost = $this->getSpecialtyCost($insurer, $specialty);
+        $allSpecialtyCosts = collect($insurer->specialty_costs);
+        $cheapestSpecialty = $allSpecialtyCosts->sortKeys()->keys()->first();
+        $mostExpensiveSpecialty = $allSpecialtyCosts->sortKeysDesc()->keys()->first();
+
+        if ($specialty === $mostExpensiveSpecialty) {
+            $tips[] = "This claim's specialty ($specialty) has a high processing cost with this insurer. Consider using an insurer with better rates for this specialty.";
+        }
+
+        // Priority level tip
+        if ($priority >= 4) {
+            $tips[] = "High priority (level $priority) significantly increases processing costs. Only use high priority for urgent claims.";
+        }
+
+        // Value threshold tip
+        if ($insurer->claim_value_threshold > 0) {
+            if ($amount > $insurer->claim_value_threshold) {
+                $tips[] = "This claim exceeds the insurer's value threshold (\${$insurer->claim_value_threshold}), incurring a {$insurer->claim_value_multiplier}x multiplier.";
+            } elseif ($amount > $insurer->claim_value_threshold * 0.9) {
+                $tips[] = "This claim is approaching the insurer's value threshold (\${$insurer->claim_value_threshold}). Consider splitting into multiple claims if possible.";
+            }
+        }
+
+        // Date-related tip
+        if ($date) {
+            $dayFactor = $this->batchingService->calculateDayFactor($date);
+            if ($dayFactor > 0.35) { // If in the later part of the month
+                $tips[] = "Processing claims at this time of month incurs higher costs. Early month processing is more economical.";
+            }
+        }
+
+        return $tips;
+    }
+
+    /**
+     * Get the specialty cost for an insurer
+     */
+    private function getSpecialtyCost(Insurer $insurer, string $specialty): float
+    {
+        return $insurer->specialty_costs[$specialty] ?? 100.0; // Default to 100 if not specified
+    }
 }

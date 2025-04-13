@@ -11,6 +11,8 @@ Route::get('/user', function (Request $request) {
 // Public API Endpoints
 Route::prefix('claims')->group(function () {
     Route::get('/insurers', [ClaimController::class, 'getInsurers']);
+    Route::get('/insurers/details', [ClaimController::class, 'getInsurerDetails']);
+    Route::post('/estimate-cost', [ClaimController::class, 'estimateClaimCost']);
 });
 
 // Protected API Endpoints

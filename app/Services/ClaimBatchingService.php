@@ -416,7 +416,7 @@ class ClaimBatchingService
      * @param string $date The date to calculate the factor for
      * @return float The cost factor (between 0.2 and 0.5)
      */
-    private function calculateDayFactor(string $date): float
+    public function calculateDayFactor(string $date): float
     {
         $day = (int)Carbon::parse($date)->format('j');
         $maxDay = (int)Carbon::parse($date)->endOfMonth()->format('j');
