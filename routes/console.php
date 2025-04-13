@@ -8,6 +8,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote')->hourly();
 
 Schedule::command('claims:process-daily-batch')
-    ->everyMinute()
-    // ->dailyAt('00:00')
+    ->dailyAt('00:00')
     ->appendOutputTo(storage_path('logs/daily-claim-batches.log'));
