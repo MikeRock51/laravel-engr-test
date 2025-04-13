@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Api\ClaimController;
+use App\Http\Controllers\ClaimDetailsController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -25,6 +26,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/claims/process-batches', [ClaimController::class, 'processBatches'])->name('claims.process-batches');
     Route::get('/claims/batch-summary', [ClaimController::class, 'getBatchSummary'])->name('claims.batch-summary');
     Route::get('/claims/list', [ClaimController::class, 'getClaims'])->name('claims.list');
+
+    // Claim details page
+    Route::get('/claims/{claim}', [ClaimDetailsController::class, 'show'])->name('claims.show');
 
     // Claim Batches Page (now protected)
     Route::get('/batches', function () {

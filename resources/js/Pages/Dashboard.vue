@@ -82,10 +82,11 @@ function getStatusBadgeClass(status) {
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch ID</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="claim in claims" :key="claim.id" class="hover:bg-gray-50">
+                                    <tr v-for="claim in claims" :key="claim.id" class="hover:bg-gray-50 cursor-pointer" @click="$inertia.visit(route('claims.show', claim.id))">
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ claim.id }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                             {{ claim.insurer?.name || 'Unknown' }}
@@ -106,6 +107,15 @@ function getStatusBadgeClass(status) {
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {{ claim.batch_id || 'Not Assigned' }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <Link
+                                                :href="route('claims.show', claim.id)"
+                                                class="text-indigo-600 hover:text-indigo-900"
+                                                @click.stop
+                                            >
+                                                View Details
+                                            </Link>
                                         </td>
                                     </tr>
                                 </tbody>
