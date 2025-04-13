@@ -38,6 +38,9 @@ const showingNavigationDropdown = ref(false);
                                 <NavLink :href="route('batches')" :active="route().current('batches')">
                                     Claim Batches
                                 </NavLink>
+                                <NavLink :href="route('batch.dashboard')" :active="route().current('batch.dashboard')">
+                                    Batch Dashboard
+                                </NavLink>
                             </div>
                         </div>
 
@@ -126,6 +129,9 @@ const showingNavigationDropdown = ref(false);
                         </ResponsiveNavLink>
                         <ResponsiveNavLink :href="route('batches')" :active="route().current('batches')">
                             Claim Batches
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink :href="route('batch.dashboard')" :active="route().current('batch.dashboard')">
+                            Batch Dashboard
                         </ResponsiveNavLink>
                     </div>
 

@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Exceptions\BatchingException;
 
 class ClaimBatchingService
 {
@@ -54,47 +55,72 @@ class ClaimBatchingService
      * @param Insurer $insurer
      * @param int|null $userId Optional user ID to filter claims by user
      * @return array
+     * @throws BatchingException If there's an error in the batching process
      */
     public function processInsurerClaims(Insurer $insurer, ?int $userId = null): array
     {
-        $pendingClaims = $this->getPendingClaims($insurer, $userId);
-        if ($pendingClaims->isEmpty()) {
-            return [];
-        }
-
-        // Use our new specialty-cost optimized sorting instead of just priority-based
-        $sortedClaims = $this->sortClaimsBySpecialtyCost($pendingClaims, $insurer);
-
-        $results = [];
-        $dailyBatches = $this->createOptimizedDailyBatches($sortedClaims, $insurer);
-
-        // Process batches in a transaction for better performance and data integrity
-        DB::beginTransaction();
         try {
-            foreach ($dailyBatches as $providerDateKey => $batches) {
-                // Extract the date portion from the provider|date key for storing in claim record
-                list($providerName, $date) = explode('|', $providerDateKey);
-
-                foreach ($batches as $batchIndex => $claims) {
-                    $batchId = $this->generateBatchId($insurer, $providerDateKey, $batchIndex);
-                    $batchResults = $this->createBatch($claims, $batchId, $date);
-                    $results[] = [
-                        'batch_id' => $batchId,
-                        'provider_name' => $providerName,
-                        'date' => $date,
-                        'claim_count' => count($claims),
-                        'total_value' => $batchResults['total_value'],
-                        'processing_cost' => $batchResults['processing_cost']
-                    ];
-                }
+            $pendingClaims = $this->getPendingClaims($insurer, $userId);
+            if ($pendingClaims->isEmpty()) {
+                return [];
             }
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
-        }
 
-        return $results;
+            // Use our new specialty-cost optimized sorting instead of just priority-based
+            $sortedClaims = $this->sortClaimsBySpecialtyCost($pendingClaims, $insurer);
+
+            $results = [];
+            $dailyBatches = $this->createOptimizedDailyBatches($sortedClaims, $insurer);
+
+            // Process batches in a transaction for better performance and data integrity
+            DB::beginTransaction();
+            try {
+                foreach ($dailyBatches as $providerDateKey => $batches) {
+                    // Extract the date portion from the provider|date key for storing in claim record
+                    list($providerName, $date) = explode('|', $providerDateKey);
+
+                    foreach ($batches as $batchIndex => $claims) {
+                        $batchId = $this->generateBatchId($insurer, $providerDateKey, $batchIndex);
+                        $batchResults = $this->createBatch($claims, $batchId, $date);
+                        $results[] = [
+                            'batch_id' => $batchId,
+                            'provider_name' => $providerName,
+                            'date' => $date,
+                            'claim_count' => count($claims),
+                            'total_value' => $batchResults['total_value'],
+                            'processing_cost' => $batchResults['processing_cost']
+                        ];
+                    }
+                }
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw new BatchingException(
+                    "Error processing batches: " . $e->getMessage(),
+                    [
+                        'insurer' => $insurer->code,
+                        'claims_count' => $pendingClaims->count(),
+                    ],
+                    0,
+                    $e
+                );
+            }
+
+            return $results;
+        } catch (\Exception $e) {
+            if ($e instanceof BatchingException) {
+                throw $e;
+            }
+
+            throw new BatchingException(
+                "Unexpected error during claim batching: " . $e->getMessage(),
+                [
+                    'insurer_id' => $insurer->id,
+                    'insurer_code' => $insurer->code
+                ],
+                0,
+                $e
+            );
+        }
     }
 
     /**

@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\ClaimController;
+use App\Http\Controllers\Api\BatchDashboardController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -23,3 +24,8 @@ Route::prefix('claims')->middleware('auth:sanctum')->group(function () {
     Route::get('/batch-summary', [ClaimController::class, 'getBatchSummary']);
     Route::post('/trigger-daily-batch', [ClaimController::class, 'triggerDailyBatch']);
 });
+
+// Batch Dashboard routes
+Route::get('/batch-dashboard/summary', [BatchDashboardController::class, 'getSummary']);
+Route::get('/batch-dashboard/chart-data', [BatchDashboardController::class, 'getChartData']);
+Route::get('/batch-dashboard/batches', [BatchDashboardController::class, 'getBatches']);

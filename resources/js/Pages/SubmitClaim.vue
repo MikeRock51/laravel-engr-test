@@ -407,21 +407,121 @@ watch([() => form.insurer_id, () => form.specialty, () => form.priority_level],
     }
 );
 
+// Form validation logic
+function validateForm() {
+    let isValid = true;
+    const errors = {};
+
+    // Validate required fields
+    if (!form.insurer_id) {
+        errors.insurer_id = "Please select an insurer";
+        isValid = false;
+    }
+
+    if (!form.provider_name) {
+        errors.provider_name = "Provider name is required";
+        isValid = false;
+    }
+
+    if (!form.specialty) {
+        errors.specialty = "Please select a specialty";
+        isValid = false;
+    }
+
+    if (!form.encounter_date) {
+        errors.encounter_date = "Encounter date is required";
+        isValid = false;
+    } else {
+        // Validate that encounter date is not in the future
+        const encounterDate = new Date(form.encounter_date);
+        const today = new Date();
+        if (encounterDate > today) {
+            errors.encounter_date = "Encounter date cannot be in the future";
+            isValid = false;
+        }
+    }
+
+    if (!form.priority_level) {
+        errors.priority_level = "Priority level is required";
+        isValid = false;
+    }
+
+    // Validate claim items
+    form.items.forEach((item, index) => {
+        if (!item.name) {
+            errors[`items.${index}.name`] = "Item name is required";
+            isValid = false;
+        }
+
+        if (!item.unit_price || item.unit_price <= 0) {
+            errors[`items.${index}.unit_price`] = "Unit price must be greater than 0";
+            isValid = false;
+        }
+
+        if (!item.quantity || item.quantity < 1) {
+            errors[`items.${index}.quantity`] = "Quantity must be at least 1";
+            isValid = false;
+        }
+    });
+
+    // Assign errors to form
+    form.clearErrors();
+    if (!isValid) {
+        form.setError(errors);
+    }
+
+    return isValid;
+}
+
 function submitClaim() {
+    // Validate form before submission
+    if (!validateForm()) {
+        // Show validation message
+        const errorToast = document.createElement('div');
+        errorToast.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50';
+        errorToast.innerHTML = 'Please fix the validation errors before submitting';
+        document.body.appendChild(errorToast);
+
+        // Remove after 3 seconds
+        setTimeout(() => {
+            document.body.removeChild(errorToast);
+        }, 3000);
+
+        return;
+    }
+
     processing.value = true;
 
     // Use the web route for submitting claims
     form.post(route('claims.submit'), {
         preserveScroll: true,
         onSuccess: () => {
-            // Form submission was successful and should redirect to dashboard
-            // If it doesn't redirect (which it should), we'll show the success modal
+            // Reset form to default values
+            form.reset();
+            form.items = [{ name: '', unit_price: 0, quantity: 1 }];
+            form.submission_date = new Date().toISOString().split('T')[0];
+            form.priority_level = 3;
+
+            // Show success modal
             showSuccessModal.value = true;
             processing.value = false;
+
+            // Reset cost estimation
+            costEstimation.value = null;
+            showCostEstimation.value = false;
         },
         onError: (errors) => {
             console.error('Validation errors:', errors);
             processing.value = false;
+
+            // Scroll to the first error
+            setTimeout(() => {
+                const firstErrorElement = document.querySelector('.border-red-500');
+                if (firstErrorElement) {
+                    firstErrorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstErrorElement.focus();
+                }
+            }, 100);
         },
         onFinish: () => {
             processing.value = false;
