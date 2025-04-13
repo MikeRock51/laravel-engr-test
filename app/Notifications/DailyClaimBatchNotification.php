@@ -3,12 +3,12 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Carbon\Carbon;
 
-class DailyClaimBatchNotification extends Notification implements ShouldQueue
+// Remove ShouldQueue interface to make this notification send immediately instead of being queued
+class DailyClaimBatchNotification extends Notification
 {
     use Queueable;
 
@@ -16,11 +16,6 @@ class DailyClaimBatchNotification extends Notification implements ShouldQueue
      * The batches to notify about.
      */
     protected $batches;
-
-    /**
-     * Notification delay to improve system performance
-     */
-    public $delay = 60; // seconds
 
     /**
      * Maximum number of tries for the job
@@ -36,11 +31,8 @@ class DailyClaimBatchNotification extends Notification implements ShouldQueue
     {
         $this->batches = $batches;
 
-        // Set the connection to use for queueing
-        $this->onConnection('database');
-
-        // Set the queue to use
-        $this->onQueue('notifications');
+        // Remove queueing configuration to ensure notifications are sent immediately
+        // without relying on a queue worker
     }
 
     /**

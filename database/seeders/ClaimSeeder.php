@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Claim;
 use App\Models\ClaimItem;
 use App\Models\Insurer;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
@@ -17,6 +18,18 @@ class ClaimSeeder extends Seeder
     {
         // Get all insurers to distribute claims among them
         $insurers = Insurer::all();
+
+        // Get test user
+        $testUser = User::where('email', 'test@example.com')->first() ?? User::first();
+
+        // If no user exists, create one (fallback)
+        if (!$testUser) {
+            $testUser = User::create([
+                'name' => 'Test User',
+                'email' => 'test@example.com',
+                'password' => bcrypt('password'),
+            ]);
+        }
 
         // Array of provider names for sample data
         $providers = [
@@ -106,8 +119,8 @@ class ClaimSeeder extends Seeder
             $encounterDate = Carbon::now()->subDays(rand(5, 30))->format('Y-m-d');
             $submissionDate = Carbon::parse($encounterDate)->addDays(rand(1, 5))->format('Y-m-d');
 
-            // Determine if this claim should be batched (60% batched, 40% pending)
-            $isBatched = rand(1, 100) <= 60;
+            // Determine if this claim should be batched (20% batched, 80% pending)
+            $isBatched = rand(1, 100) <= 20;
             $batchDate = null;
             $batchId = null;
             $status = 'pending';
@@ -134,6 +147,7 @@ class ClaimSeeder extends Seeder
             // Create the claim
             $claim = Claim::create([
                 'insurer_id' => $insurer->id,
+                'user_id' => $testUser->id,
                 'provider_name' => $provider,
                 'encounter_date' => $encounterDate,
                 'submission_date' => $submissionDate,
@@ -152,13 +166,14 @@ class ClaimSeeder extends Seeder
                 $item = $medicalItems[array_rand($medicalItems)];
                 $unitPrice = rand($item['price_range'][0], $item['price_range'][1]);
                 $quantity = rand(1, 3);
+                $subtotal = $unitPrice * $quantity;
 
                 ClaimItem::create([
                     'claim_id' => $claim->id,
-                    'name' => $item['name'],
+                    'name' => (string)$item['name'], // Ensure this is cast to string
                     'unit_price' => $unitPrice,
                     'quantity' => $quantity,
-                    'subtotal' => $unitPrice * $quantity
+                    'subtotal' => $subtotal,
                 ]);
             }
 
