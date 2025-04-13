@@ -50,7 +50,7 @@ class ClaimBatchingServiceTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function it_batches_claims_correctly()
     {
         // Create 15 pending claims instead of 10 to ensure we have enough for multiple batches
@@ -95,7 +95,7 @@ class ClaimBatchingServiceTest extends TestCase
         $this->assertEquals(15, $totalClaims, 'Not all claims were batched');
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function it_respects_daily_capacity_constraints()
     {
         // Create more claims than the daily capacity
@@ -118,7 +118,7 @@ class ClaimBatchingServiceTest extends TestCase
         }
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function it_prioritizes_claims_by_specialty_cost()
     {
         // Create claims with different specialties
@@ -145,7 +145,7 @@ class ClaimBatchingServiceTest extends TestCase
         );
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function it_handles_value_thresholds_correctly()
     {
         // Create a mix of high-value and low-value claims
@@ -183,7 +183,7 @@ class ClaimBatchingServiceTest extends TestCase
         }
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function it_handles_empty_claims_gracefully()
     {
         // Process with no claims
@@ -194,7 +194,7 @@ class ClaimBatchingServiceTest extends TestCase
         $this->assertEmpty($results);
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function it_calculates_day_factor_correctly()
     {
         // Test the day factor calculation directly

@@ -48,7 +48,7 @@ class ClaimSubmissionTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function user_can_submit_a_claim()
     {
         $claimData = [
@@ -90,7 +90,7 @@ class ClaimSubmissionTest extends TestCase
         $this->assertCount(2, $claim->items);
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function claim_validation_prevents_invalid_data()
     {
         $invalidClaimData = [
@@ -126,7 +126,7 @@ class ClaimSubmissionTest extends TestCase
         $this->assertTrue(session()->has('errors'));
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function total_amount_is_calculated_correctly()
     {
         $claimData = [

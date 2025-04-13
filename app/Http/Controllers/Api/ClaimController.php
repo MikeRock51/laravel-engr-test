@@ -262,11 +262,29 @@ class ClaimController extends Controller
     /**
      * Get a summary of batches
      */
-    public function getBatchSummary()
+    public function getBatchSummary(Request $request)
     {
-        $batches = Claim::where('is_batched', true)
-            ->where('user_id', auth()->id())
-            ->select('batch_id', 'batch_date', 'insurer_id', 'provider_name')
+        $query = Claim::where('is_batched', true)
+            ->where('user_id', auth()->id());
+
+        // Apply filters if provided
+        if ($request->has('insurer_id') && $request->insurer_id) {
+            $query->where('insurer_id', $request->insurer_id);
+        }
+
+        if ($request->has('from_date') && $request->from_date) {
+            $fromDate = $request->from_date;
+            if ($request->has('to_date') && $request->to_date) {
+                $toDate = $request->to_date;
+                $query->whereBetween('batch_date', [$fromDate, $toDate]);
+            } else {
+                $query->where('batch_date', '>=', $fromDate);
+            }
+        } else if ($request->has('to_date') && $request->to_date) {
+            $query->where('batch_date', '<=', $request->to_date);
+        }
+
+        $batches = $query->select('batch_id', 'batch_date', 'insurer_id', 'provider_name')
             ->selectRaw('COUNT(*) as claim_count')
             ->selectRaw('SUM(total_amount) as total_value')
             ->groupBy('batch_id', 'batch_date', 'insurer_id', 'provider_name')
