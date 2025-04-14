@@ -65,7 +65,6 @@ class ClaimBatchingService
                 return [];
             }
 
-            // Use our new specialty-cost optimized sorting instead of just priority-based
             $sortedClaims = $this->sortClaimsBySpecialtyCost($pendingClaims, $insurer);
 
             $results = [];
@@ -171,114 +170,19 @@ class ClaimBatchingService
         // Get optimal processing dates based on cost factors
         $optimalDates = $this->findOptimalProcessingDates();
 
-        // First group claims by provider_name
-        $providerGroups = $claims->groupBy('provider_name');
+        // Prepare all claims with metadata for batch assignment in a single pass
+        $claimsWithMetadata = $this->prepareClaimsForBatching($claims, $insurer, $optimalDates);
 
-        foreach ($providerGroups as $providerName => $providerClaims) {
-            // Group claims by specialty for better costing efficiency
-            $specialtyGroups = $providerClaims->groupBy('specialty');
-
-            // Sort specialties by their processing cost (lowest cost first)
-            $specialtyCosts = [];
-            foreach ($specialtyGroups as $specialty => $claims) {
-                $specialtyCosts[$specialty] = $this->getSpecialtyCost($insurer, $specialty);
-            }
-            asort($specialtyCosts);
-
-            // Process claims by specialty, starting with lowest-cost specialties
-            foreach (array_keys($specialtyCosts) as $specialty) {
-                $specialtyClaims = $specialtyGroups[$specialty];
-
-                // Optimize high-priority claims by assigning them to early month dates
-                // and low-priority claims to later dates or early next month
-                $priorityGroups = $specialtyClaims->groupBy('priority_level');
-
-                // Sort priority groups by key (highest first)
-                // Using Laravel's sortByDesc instead of PHP's krsort which only works on arrays
-                $priorityGroups = $priorityGroups->sortKeysDesc();
-
-                foreach ($priorityGroups as $priority => $priorityClaims) {
-                    // For claims with different priorities, use different date selection strategies
-                    if ($priority >= 4) { // High priority (4-5)
-                        // Use the earliest possible dates for highest priority claims
-                        $datePool = array_slice($optimalDates, 0, 5, true);
-                    } else if ($priority >= 2) { // Medium priority (2-3)
-                        // Use mid-range dates
-                        $datePool = array_slice($optimalDates, 5, 10, true);
-                    } else { // Low priority (1)
-                        // Use dates with lowest cost factors (likely early next month)
-                        $datePool = array_slice($optimalDates, 15, 20, true);
-                    }
-
-                    // Reset date index for each priority group
-                    $dateIndex = 0;
-                    $availableDates = array_keys($datePool);
-
-                    foreach ($priorityClaims as $claim) {
-                        // Select a date from the appropriate pool, respecting daily capacity
-                        $currentDate = $availableDates[$dateIndex % count($availableDates)];
-
-                        // Check if we've reached daily capacity for the current date
-                        while (
-                            isset($dailyClaimCounts[$currentDate]) &&
-                            $dailyClaimCounts[$currentDate] >= $insurer->daily_capacity
-                        ) {
-                            // Move to next date in the pool
-                            $dateIndex++;
-                            $currentDate = $availableDates[$dateIndex % count($availableDates)];
-                        }
-
-                        // Initialize counters using null coalescing operator for better performance
-                        $dailyClaimCounts[$currentDate] = $dailyClaimCounts[$currentDate] ?? 0;
-
-                        // Create a composite key for provider+date
-                        $providerDateKey = $providerName . '|' . $currentDate;
-
-                        // Initialize provider+date batches array if not set
-                        if (!isset($dailyBatches[$providerDateKey])) {
-                            $dailyBatches[$providerDateKey] = [];
-                        }
-
-                        // Find an existing batch that has room
-                        $batchAssigned = false;
-                        foreach ($dailyBatches[$providerDateKey] as $batchIndex => $batchClaims) {
-                            if (count($batchClaims) < $insurer->max_batch_size) {
-                                // Before adding, check if adding this claim would push the batch over the value threshold
-                                if ($insurer->claim_value_threshold > 0) {
-                                    $currentBatchValue = array_reduce($batchClaims, function ($sum, $claim) {
-                                        return $sum + $claim->total_amount;
-                                    }, 0);
-
-                                    // If adding this claim would cross the threshold and the batch isn't small,
-                                    // don't add it to this batch
-                                    if (
-                                        $currentBatchValue < $insurer->claim_value_threshold &&
-                                        ($currentBatchValue + $claim->total_amount) > $insurer->claim_value_threshold &&
-                                        count($batchClaims) >= $insurer->min_batch_size / 2
-                                    ) {
-                                        continue; // Try next batch
-                                    }
-                                }
-
-                                $dailyBatches[$providerDateKey][$batchIndex][] = $claim;
-                                $batchAssigned = true;
-                                break;
-                            }
-                        }
-
-                        // If no existing batch had room or was suitable, create a new one
-                        if (!$batchAssigned) {
-                            $dailyBatches[$providerDateKey][] = [$claim];
-                        }
-
-                        // Increment daily claim count
-                        $dailyClaimCounts[$currentDate]++;
-
-                        // Move to next date for next claim to distribute load
-                        $dateIndex++;
-                    }
-                }
-            }
+        // Process the prepared claims for batching
+        foreach ($claimsWithMetadata as $claimData) {
+            $this->assignClaimToBatch(
+                $claimData['claim'],
+                $claimData['provider_name'],
+                $claimData['date_pool'],
+                $dailyBatches,
+                $dailyClaimCounts,
+                $insurer
+            );
         }
 
         // Further optimize batches with value threshold consideration
@@ -299,6 +203,192 @@ class ClaimBatchingService
 
         // Optimize batches to respect min_batch_size constraint
         return $this->optimizeBatchSizes($optimizedValueBatches, $insurer);
+    }
+
+    /**
+     * Prepare claims for batching by adding necessary metadata
+     */
+    private function prepareClaimsForBatching(Collection $claims, Insurer $insurer, array $optimalDates): array
+    {
+        $preparedClaims = [];
+
+        // Group by provider first
+        $providerGroups = $claims->groupBy('provider_name');
+
+        foreach ($providerGroups as $providerName => $providerClaims) {
+            // Get claims grouped by specialty and sorted by processing cost
+            $specialtyGroups = $this->groupAndSortBySpecialty($providerClaims, $insurer);
+
+            foreach ($specialtyGroups as $specialty => $specialtyClaims) {
+                // Group claims by priority level and sort (highest first)
+                $priorityGroups = $specialtyClaims->groupBy('priority_level')->sortKeysDesc();
+
+                foreach ($priorityGroups as $priority => $priorityClaims) {
+                    // Determine date pool based on priority
+                    $datePool = $this->getDatePoolForPriority($priority, $optimalDates);
+
+                    // Add each claim with its metadata
+                    foreach ($priorityClaims as $claim) {
+                        $preparedClaims[] = [
+                            'claim' => $claim,
+                            'provider_name' => $providerName,
+                            'specialty' => $specialty,
+                            'priority' => $priority,
+                            'date_pool' => $datePool
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $preparedClaims;
+    }
+
+    /**
+     * Group claims by specialty and sort by processing cost
+     */
+    private function groupAndSortBySpecialty(Collection $claims, Insurer $insurer): Collection
+    {
+        $specialtyGroups = $claims->groupBy('specialty');
+
+        // Get processing costs for each specialty
+        $specialtyCosts = [];
+        foreach ($specialtyGroups as $specialty => $claims) {
+            $specialtyCosts[$specialty] = $this->getSpecialtyCost($insurer, $specialty);
+        }
+
+        // Sort specialties by cost (lowest first)
+        asort($specialtyCosts);
+
+        // Create a new collection with specialties in the correct order
+        // Make sure to return an Eloquent Collection, not a Support Collection
+        $sortedGroups = new Collection();
+        foreach (array_keys($specialtyCosts) as $specialty) {
+            if (isset($specialtyGroups[$specialty])) {
+                $sortedGroups[$specialty] = $specialtyGroups[$specialty];
+            }
+        }
+
+        return $sortedGroups;
+    }
+
+    /**
+     * Get appropriate date pool based on claim priority
+     */
+    private function getDatePoolForPriority(int $priority, array $optimalDates): array
+    {
+        if ($priority >= 4) { // High priority (4-5)
+            // Use the earliest possible dates for highest priority claims
+            return array_slice($optimalDates, 0, 5, true);
+        } elseif ($priority >= 2) { // Medium priority (2-3)
+            // Use mid-range dates
+            return array_slice($optimalDates, 5, 10, true);
+        } else { // Low priority (1)
+            // Use dates with lowest cost factors (likely early next month)
+            return array_slice($optimalDates, 15, 20, true);
+        }
+    }
+
+    /**
+     * Assign a claim to an appropriate batch
+     */
+    private function assignClaimToBatch(
+        Claim $claim,
+        string $providerName,
+        array $datePool,
+        array &$dailyBatches,
+        array &$dailyClaimCounts,
+        Insurer $insurer
+    ): void {
+        $availableDates = array_keys($datePool);
+        $dateIndex = 0;
+
+        // Find a suitable date that hasn't reached capacity
+        $currentDate = $this->findAvailableDate($availableDates, $dailyClaimCounts, $insurer, $dateIndex);
+
+        // Initialize counter for the selected date
+        $dailyClaimCounts[$currentDate] = ($dailyClaimCounts[$currentDate] ?? 0) + 1;
+
+        // Create composite key for provider+date and initialize if needed
+        $providerDateKey = $providerName . '|' . $currentDate;
+        if (!isset($dailyBatches[$providerDateKey])) {
+            $dailyBatches[$providerDateKey] = [];
+        }
+
+        // Find an existing batch or create a new one
+        $this->addClaimToBatch($claim, $providerDateKey, $dailyBatches, $insurer);
+    }
+
+    /**
+     * Find a date that hasn't reached capacity
+     */
+    private function findAvailableDate(array $availableDates, array $dailyClaimCounts, Insurer $insurer, int &$dateIndex): string
+    {
+        $currentDate = $availableDates[$dateIndex % count($availableDates)];
+
+        // Check if we've reached daily capacity for the current date
+        while (
+            isset($dailyClaimCounts[$currentDate]) &&
+            $dailyClaimCounts[$currentDate] >= $insurer->daily_capacity
+        ) {
+            // Move to next date in the pool
+            $dateIndex++;
+            $currentDate = $availableDates[$dateIndex % count($availableDates)];
+        }
+
+        return $currentDate;
+    }
+
+    /**
+     * Add a claim to an appropriate batch
+     */
+    private function addClaimToBatch(Claim $claim, string $providerDateKey, array &$dailyBatches, Insurer $insurer): void
+    {
+        $batchAssigned = false;
+
+        // Try to find an existing batch with room
+        foreach ($dailyBatches[$providerDateKey] as $batchIndex => $batchClaims) {
+            if (count($batchClaims) < $insurer->max_batch_size) {
+                // Check value threshold if applicable
+                if ($this->canAddToExistingBatch($claim, $batchClaims, $insurer)) {
+                    $dailyBatches[$providerDateKey][$batchIndex][] = $claim;
+                    $batchAssigned = true;
+                    break;
+                }
+            }
+        }
+
+        // Create a new batch if needed
+        if (!$batchAssigned) {
+            $dailyBatches[$providerDateKey][] = [$claim];
+        }
+    }
+
+    /**
+     * Check if a claim can be added to an existing batch based on value threshold
+     */
+    private function canAddToExistingBatch(Claim $claim, array $batchClaims, Insurer $insurer): bool
+    {
+        // If insurer has no threshold, any batch with space is fine
+        if ($insurer->claim_value_threshold <= 0) {
+            return true;
+        }
+
+        // Calculate current batch value
+        $currentBatchValue = array_reduce($batchClaims, function ($sum, $claim) {
+            return $sum + $claim->total_amount;
+        }, 0);
+
+        // If adding claim would cross threshold and batch isn't small, avoid this batch
+        if (
+            $currentBatchValue < $insurer->claim_value_threshold &&
+            ($currentBatchValue + $claim->total_amount) > $insurer->claim_value_threshold &&
+            count($batchClaims) >= $insurer->min_batch_size / 2
+        ) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -543,9 +633,9 @@ class ClaimBatchingService
             $specialtyCosts[$specialty] = $this->getSpecialtyCost($insurer, $specialty);
         }
 
-        // Custom sorting function that considers specialty cost, priority, and date
         $dateField = $insurer->date_preference;
 
+        // Custom sorting function that considers specialty cost, priority, and date
         return $claims->sortBy(function ($claim) use ($specialtyCosts, $dateField) {
             // Lower specialty cost and higher priority should come first
             // Convert to string for proper sorting with multiple criteria
