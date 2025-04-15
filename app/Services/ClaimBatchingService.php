@@ -78,7 +78,7 @@ class ClaimBatchingService
                     list($providerName, $date) = explode('|', $providerDateKey);
 
                     foreach ($batches as $batchIndex => $claims) {
-                        $batchId = $this->generateBatchId($insurer, $providerDateKey, $batchIndex);
+                        $batchId = $this->generateBatchId($providerName, $date, $batchIndex);
                         $batchResults = $this->createBatch($claims, $batchId, $date);
                         $results[] = [
                             'batch_id' => $batchId,
@@ -472,11 +472,8 @@ class ClaimBatchingService
     /**
      * Generate a unique batch ID
      */
-    private function generateBatchId(Insurer $insurer, string $providerDateKey, int $batchIndex): string
+    private function generateBatchId(string $providerName, string $date, int $batchIndex): string
     {
-        // Extract provider name and date from the key
-        list($providerName, $date) = explode('|', $providerDateKey);
-
         // Format date as specified (e.g., "Jan 5 2021")
         $formattedDate = Carbon::parse($date)->format('M j Y');
 
