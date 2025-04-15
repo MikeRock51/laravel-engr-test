@@ -261,7 +261,6 @@ class ClaimBatchingService
         asort($specialtyCosts);
 
         // Create a new collection with specialties in the correct order
-        // Make sure to return an Eloquent Collection, not a Support Collection
         $sortedGroups = new Collection();
         foreach (array_keys($specialtyCosts) as $specialty) {
             if (isset($specialtyGroups[$specialty])) {
